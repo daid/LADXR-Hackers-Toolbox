@@ -36,6 +36,7 @@ import patches.witch
 import assembler
 import roomEditor
 import backgroundEditor
+import ips
 
 from romTables import ROMWithTables
 
@@ -134,6 +135,7 @@ def main(argv):
         importRomData(rom, args.path)
         patches.aesthetics.updateSpriteData(rom)
         rom.save(args.build)
+        ips.makePatch(args.input_filename, args.build, os.path.splitext(args.build)[0] + ".ips")
 
 
 if __name__ == "__main__":
