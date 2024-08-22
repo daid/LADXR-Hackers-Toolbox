@@ -1,16 +1,25 @@
 
 class Patch:
-    def __init__(self, start, size):
+    def __init__(self, start, size, type=0):
         self.start = start
         self.size = size
-        self.type = 0
+        self.type = type
 
     @property
     def end(self):
         return self.start + self.size
+    @end.setter
+    def end(self, value):
+        self.size = value - self.start
+
+    def copy(self):
+        return Patch(self.start, self.size, self.type)
+
+    def __repr__(self):
+        return f"{self.start>>14:02x}:{self.start&0x3FFF|0x4000:04x}-{self.end>>14:02x}:{self.end&0x3FFF|0x4000:04x} {self.size} {self.type}"
 
 
-def findRLESequences(data, min_size=12):
+def findRLESequences(data, min_size=20):
     rle = []
     prev = None
     length = 0
@@ -53,11 +62,32 @@ def makePatch(old, new, patch):
             patches.pop(idx+1)
         else:
             idx += 1
+    # Find RLE patches
+    idx = 0
+    while idx < len(patches):
+        p = patches[idx]
+        result = [p.copy()]
+        for offset, length in findRLESequences(new[p.start:p.end]):
+            new_patch = Patch(p.start + offset, length)
+            new_patch.type = 1
+            if result[-1].start == new_patch.start:
+                result.pop()
+            else:
+                result[-1].end = new_patch.start
+            result.append(new_patch)
+            if new_patch.end < p.end:
+                result.append(Patch(new_patch.end, p.end - new_patch.end))
+        patches[idx:idx+1] = result
+        idx += len(result)
 
     patch = open(patch, "wb")
     patch.write(b"PATCH")
     for p in patches:
         patch.write(bytes([p.start >> 16, (p.start >> 8) & 0xFF, p.start & 0xFF]))
-        patch.write(bytes([p.size >> 8, p.size & 0xFF]))
-        patch.write(new[p.start:p.end])
+        if p.type == 0:
+            patch.write(bytes([p.size >> 8, p.size & 0xFF]))
+            patch.write(new[p.start:p.end])
+        elif p.type == 1:
+            patch.write(b'\x00\x00')
+            patch.write(bytes([p.size >> 8, p.size & 0xFF, new[p.start]]))
     patch.write(b"EOF")
